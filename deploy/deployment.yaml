@@ -30,6 +30,10 @@ spec:
               value: phaseolus
             - name: RabbitMq__Pass
               value: phaseolus
+            - name: OTEL_SERVICE_NAME
+              value: cookerbeaners
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: http://tempo.infra.svc.cluster.local:4317
           livenessProbe:
             httpGet:
               path: /healthz/live
