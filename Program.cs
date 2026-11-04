@@ -1,10 +1,35 @@
+using System.Diagnostics;
 using System.Text.Json;
 using CookerBeaners.HealthChecks;
 using CookerBeaners.Messaging;
 using CookerBeaners.Models;
+using OpenTelemetry.Trace;
 using Prometheus;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// otel-tracing plan Step 3/Q4: surfaces the active trace/span ID in log scopes
+// (Console:IncludeScopes in appsettings.json renders them) so a trace can be
+// cross-referenced against kubectl logs / Loki without a UI click-through.
+builder.Logging.Configure(options =>
+{
+    options.ActivityTrackingOptions = ActivityTrackingOptions.TraceId
+        | ActivityTrackingOptions.SpanId
+        | ActivityTrackingOptions.ParentId;
+});
+
+// otel-tracing plan Step 3: AddSource("CookerBeaners") picks up both the manual
+// consume-side span (EventConsumerHostedService.cs, linked to Pay's publish span
+// via the propagated traceparent header) and the publish-side spans for
+// order.cooking-started/order.cooked (EventPublisher.cs). OTEL_SERVICE_NAME/
+// OTEL_EXPORTER_OTLP_ENDPOINT are set as env vars in deploy/deployment.yaml,
+// read automatically by AddOtlpExporter.
+builder.Services.AddOpenTelemetry()
+    .WithTracing(tracing => tracing
+        .AddAspNetCoreInstrumentation()
+        .AddHttpClientInstrumentation()
+        .AddSource("CookerBeaners")
+        .AddOtlpExporter());
 
 builder.Services.Configure<RabbitMqOptions>(builder.Configuration.GetSection(RabbitMqOptions.SectionName));
 builder.Services.AddSingleton<EventPublisher>();
